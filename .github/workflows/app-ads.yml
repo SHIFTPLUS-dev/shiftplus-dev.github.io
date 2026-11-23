@@ -1,0 +1,42 @@
+name: Verify and publish app-ads.txt
+on:
+  push:
+    branches: [main]
+    paths: [app-ads.txt, .github/workflows/app-ads.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate seller declaration
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          expected = 'google.com, pub-9703060487259738, DIRECT, f08c47fec0942fa0'
+          lines = [line.strip() for line in Path('app-ads.txt').read_text().splitlines() if line.strip() and not line.lstrip().startswith('#')]
+          assert expected in lines, 'The required AdMob seller declaration is missing'
+          assert all(len(line.split(',')) in (3, 4) for line in lines), 'Invalid app-ads.txt record'
+          PY
+      - name: Prepare public files
+        run: |
+          mkdir -p _site
+          cp app-ads.txt _site/app-ads.txt
+          printf '%s\n' '<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SHIFTPLUS App Ads</title><h1>SHIFTPLUS</h1><p>온날 · Onnal — 5년 일기 / Five-year diary</p><p><a href="app-ads.txt">app-ads.txt</a></p></html>' > _site/index.html
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
